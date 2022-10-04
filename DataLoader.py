@@ -1,4 +1,3 @@
-from ctypes.wintypes import PUSHORT
 import os
 import numpy as np
 import datetime as dt
