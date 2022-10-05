@@ -45,18 +45,29 @@ class DataLoader:
                 # вытаскиваем все имена файлов за период указаный в переменной hour
                 filenames = self.__get_filenames(radar_subdir, hour)
                 # итерация скользящим окном по файлам
-                for i in range(len(filenames)-self.windows_num+1):
+                for i in range(len(filenames)-self.windows_num):
+
+                    # целевое значение не должно быть заплаткой
+                    if filenames[i+self.windows_num].endswith('patch'):
+                        continue
                     
                     # итерация по номерам каналов
                     for channel in range(self.total_chs):
 
                         # итерация по номерам лучей
                         for beam in range(self.total_bms):
-
+                            
                             # извлечение данных в виде многомерного массива
-                            yield self.__get_window(filenames=filenames[i:(i+self.windows_num)],
-                                                    bmnum=beam,
-                                                    channel=channel)
+                            x_timeseries, x_mask = self.__get_window(filenames=filenames[i:(i+self.windows_num)],
+                                                                 bmnum=beam,
+                                                                 channel=channel)
+
+                            # извдечение целевого значения
+                            y_series, _ = self.__get_data(filenames[i+self.windows_num],
+                                                          bmnum=beam,
+                                                          channel=channel)
+
+                            yield ((x_timeseries, x_mask), y_series)
     
     def __get_filenames(self,
                         directory: str, # папка, где лежат файлы
@@ -191,6 +202,12 @@ class DataLoader:
 
         return (timeseries, mask)
 
+import matplotlib.pyplot as plt
+
 loader = DataLoader('./data', 30)
-for file in loader:
-    pass
+for window, target in loader:
+    fig, axs = plt.subplots(3)
+    axs[0].imshow(window[0][:,:,0])
+    axs[1].imshow(window[1][:,:,0])
+    axs[2].imshow(target[:,:,0])
+    plt.show()
