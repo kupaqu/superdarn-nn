@@ -21,8 +21,8 @@ class DataLoader:
                      'p_l',
                      'p_s',
                      'w_l',
-                     'w_s']
-        self.mask_key = 'qflg'          # ключ по которому лежит маска
+                     'w_s',
+                     'qflg']       # ключ по которому лежит маска
         self.total_bms = 16             # количество лучей
         self.total_chs = 2              # количество каналов
         self.reg_res = 60               # регулярное разрешение (количество записей за два часа)
@@ -58,16 +58,16 @@ class DataLoader:
                         for beam in range(self.total_bms):
                             
                             # извлечение данных в виде многомерного массива
-                            x_timeseries, x_mask = self.__get_window(filenames=filenames[i:(i+self.windows_num)],
+                            x = self.__get_window(filenames=filenames[i:(i+self.windows_num)],
                                                                  bmnum=beam,
                                                                  channel=channel)
 
                             # извдечение целевого значения
-                            y_series, _ = self.__get_data(filenames[i+self.windows_num],
+                            y = self.__get_data(filenames[i+self.windows_num],
                                                           bmnum=beam,
                                                           channel=channel)
 
-                            yield ((x_timeseries, x_mask), y_series)
+                            yield (x, y)
     
     def __get_filenames(self,
                         directory: str, # папка, где лежат файлы
@@ -123,14 +123,12 @@ class DataLoader:
         #
 
         timeseries = np.zeros(shape=(self.nrang, 0, len(self.keys)))
-        mask = np.zeros(shape=(self.nrang, 0, 1))
 
         for filename in filenames:
-            sub_series, sub_mask = self.__get_data(filename, bmnum, channel)
+            sub_series = self.__get_data(filename, bmnum, channel)
             timeseries = np.concatenate((timeseries, sub_series), axis=1)
-            mask = np.concatenate((mask, sub_mask), axis=1)
 
-        return (timeseries, mask)
+        return timeseries
     
     def __get_data(self,
                    filename: str,   # имя файла из которого извлекаются данные
@@ -144,11 +142,10 @@ class DataLoader:
         print(filename)
 
         timeseries = np.zeros(shape=(self.nrang, self.reg_res, len(self.keys)))
-        mask = np.zeros(shape=(self.nrang, self.reg_res, 1))
 
         # если вместо записи присутствует заплатка, возвращаем пустые массивы
         if filename.endswith('patch'):
-            return (timeseries, mask)
+            return timeseries
 
         # открытие файла на чтение
         with bz2.open(filename) as fp:
@@ -182,7 +179,6 @@ class DataLoader:
                             for n, m in enumerate(records[i]['slist']):
                                 for j, k in enumerate(self.keys):
                                     timeseries[m, cur, j] = records[i][k][n]
-                                mask[m, cur] = records[i][self.mask_key][n]
                         cur += 1
 
                     elif diff_mins == 1:
@@ -200,14 +196,16 @@ class DataLoader:
         if cur != self.reg_res:
             warn(f'Got only {cur} records from {filename}!')
 
-        return (timeseries, mask)
+        return timeseries
 
 import matplotlib.pyplot as plt
 
 loader = DataLoader('./data', 30)
-for window, target in loader:
-    fig, axs = plt.subplots(3)
-    axs[0].imshow(window[0][:,:,0])
-    axs[1].imshow(window[1][:,:,0])
-    axs[2].imshow(target[:,:,0])
+for x, y in loader:
+    fig, axs = plt.subplots(4)
+    axs[0].imshow(x[:,:,0])
+    axs[1].imshow(x[:,:,-1])
+    axs[2].imshow(y[:,:,0])
+    axs[3].imshow(y[:,:,-1])
+
     plt.show()
