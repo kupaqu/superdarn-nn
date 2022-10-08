@@ -27,7 +27,7 @@ class DataLoader:
         self.total_chs = 2              # количество каналов
         self.reg_res = 60               # регулярное разрешение (количество записей за два часа)
 
-    def __iter__(self):
+    def __call__(self):
 
     #
     #   Функция вызывающаяся при каждой итерации.
@@ -199,13 +199,20 @@ class DataLoader:
         return timeseries
 
 import matplotlib.pyplot as plt
+import tensorflow as tf
 
-loader = DataLoader('./data', 30)
-for x, y in loader:
-    fig, axs = plt.subplots(4)
-    axs[0].imshow(x[:,:,0])
-    axs[1].imshow(x[:,:,-1])
-    axs[2].imshow(y[:,:,0])
-    axs[3].imshow(y[:,:,-1])
+dataset = tf.data.Dataset.from_generator(DataLoader('./data', 30),
+                                         output_types=(tf.float64, tf.float64)).batch(3)
 
-    plt.show()
+
+# loader = DataLoader('./data', 30)
+
+for x, y in dataset.as_numpy_iterator():
+    print(x.shape, y.shape)
+    # fig, axs = plt.subplots(4)
+    # axs[0].imshow(x[:,:,0])
+    # axs[1].imshow(x[:,:,-1])
+    # axs[2].imshow(y[:,:,0])
+    # axs[3].imshow(y[:,:,-1])
+
+    # plt.show()
