@@ -197,22 +197,3 @@ class DataLoader:
             warn(f'Got only {cur} records from {filename}!')
 
         return timeseries
-
-import matplotlib.pyplot as plt
-import tensorflow as tf
-
-dataset = tf.data.Dataset.from_generator(DataLoader('./data', 30),
-                                         output_types=(tf.float64, tf.float64)).batch(3)
-
-
-# loader = DataLoader('./data', 30)
-
-for x, y in dataset.as_numpy_iterator():
-    print(x.shape, y.shape)
-    # fig, axs = plt.subplots(4)
-    # axs[0].imshow(x[:,:,0])
-    # axs[1].imshow(x[:,:,-1])
-    # axs[2].imshow(y[:,:,0])
-    # axs[3].imshow(y[:,:,-1])
-
-    # plt.show()
