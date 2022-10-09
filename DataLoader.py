@@ -10,12 +10,13 @@ class DataLoader:
 
     def __init__(self,
                  datapath: str,
-                 windows_num: int = 30):
+                 windows_num: int = 30,
+                 nrang: int = 70):
 
         self.datapath = datapath        # путь к данным в формате fitacf.bz2
         self.windows_num = windows_num  # количество периодов в окне
+        self.nrang = nrang              # количество гейтов
         self.delta_hours = 2            # разница в часах между началом записи в файле 
-        self.nrang = 75                 # количество гейтов
         self.keys = ['pwr0',            # ключи данных
                      'v',
                      'p_l',
@@ -36,14 +37,19 @@ class DataLoader:
     #   за определенное время суток.
     #
 
-        # итерация по подпапкам данных каждого из радаров
-        for radar_subdir, _, _ in os.walk(self.datapath):
+        # подпапки с радарами
+        radars = next(os.walk('data'))[1]
+
+        # итерация по папкам с радарами
+        for radar in radars:
+            radar_subdir = os.path.join(self.datapath, radar)
 
             # итерация по периодам
             for hour in range(0, 24, self.delta_hours):
-
+                
                 # вытаскиваем все имена файлов за период указаный в переменной hour
                 filenames = self.__get_filenames(radar_subdir, hour)
+
                 # итерация скользящим окном по файлам
                 for i in range(len(filenames)-self.windows_num):
 
@@ -80,10 +86,9 @@ class DataLoader:
         #
 
         formatted_time = dt.time(hour=hour, minute=0)
-        filenames = sorted(glob.glob(directory+f'/*.{formatted_time.strftime("%H%M")}.00.*.fitacf.bz2'))
+        filenames = sorted(glob.glob(directory+f'/*/*/*.{formatted_time.strftime("%H")}*.00.*.fitacf.bz2', recursive=True))
         # массив для пропущенных значений
         patches = []
-
         # проверка остутствия пропусков во временном ряде и генерация заглушек
         if filenames:
 
@@ -93,8 +98,8 @@ class DataLoader:
             for i in range(len(filenames)):
 
                 while self.__get_date_from_filename(filenames[i]) != sliding_date:
-                    warn(f'There is no data for {hour} hours 0 minutes at {sliding_date} in {directory}!')
-                    patches.append(f"{directory}/{sliding_date.strftime('%Y%m%d')}.patch")
+                    warn(f'There is no data for {hour} hours at {sliding_date} in {directory}!')
+                    patches.append(f"{directory}/{sliding_date.strftime('%Y/%Y-%m/%Y%m%d')}.patch")
                     sliding_date += delta
 
                 sliding_date += delta
@@ -139,8 +144,6 @@ class DataLoader:
         #   Извлекает из файла массив данных.
         #
 
-        # print(filename)
-
         timeseries = np.zeros(shape=(self.nrang, self.reg_res, len(self.keys)))
 
         # если вместо записи присутствует заплатка, возвращаем пустые массивы
@@ -177,6 +180,8 @@ class DataLoader:
                         timestamps.append(rec_time)
                         if 'slist' in records[i]:
                             for n, m in enumerate(records[i]['slist']):
+                                if m >= self.nrang:
+                                    continue
                                 for j, k in enumerate(self.keys):
                                     timeseries[m, cur, j] = records[i][k][n]
                         cur += 1

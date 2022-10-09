@@ -3,13 +3,18 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D
-import warnings
 from matplotlib import pyplot as plt
+import warnings
+
 warnings.filterwarnings("ignore") 
 
-dataset = tf.data.Dataset.from_generator(DataLoader('data', 30),
+data_path = 'data'
+val_data_path = 'val_data'
+nrang = 70
+
+dataset = tf.data.Dataset.from_generator(DataLoader(data_path, 30, nrang),
                                          output_types=(tf.float64, tf.float64)).batch(8)
-val_dataset = tf.data.Dataset.from_generator(DataLoader('val_data', 30),
+val_dataset = tf.data.Dataset.from_generator(DataLoader(val_data_path, 30, nrang),
                                          output_types=(tf.float64, tf.float64)).batch(8)
 
 inp = Input(shape=(75, 1800, 7))
@@ -21,9 +26,10 @@ model.summary()
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
     loss='mae')
-callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=2)
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+model_checkpoint = tf.keras.callbacks.ModelCheckpoint('best_model.hdf5', monitor='val_loss', save_best_only=True, mode='min')
 
-history = model.fit(dataset, validation_data=val_dataset, epochs=20)
+history = model.fit(dataset, validation_data=val_dataset, epochs=20, callbacks=[early_stopping, model_checkpoint])
 
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
