@@ -28,8 +28,8 @@ for single_date in daterange(start_date, end_date):
         f.close()
 
 # данные для валидации
-start_date = datetime(2022, 1, 1, 0, 0, 0)
-end_date = datetime(2022, 5, 1, 0, 0, 0)
+start_date = datetime(2022, 5, 1, 0, 0, 0)
+end_date = datetime(2022, 8, 1, 0, 0, 0)
 for single_date in daterange(start_date, end_date):
   year, month, day = single_date.strftime("%Y %m %d").split()
   for h in range(0, 24, 2):
