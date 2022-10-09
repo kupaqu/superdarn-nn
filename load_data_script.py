@@ -28,7 +28,6 @@ for single_date in daterange(start_date, end_date):
         f.close()
 
 # данные для валидации
-# данные для обучения
 start_date = datetime(2022, 1, 1, 0, 0, 0)
 end_date = datetime(2022, 5, 1, 0, 0, 0)
 for single_date in daterange(start_date, end_date):
