@@ -139,7 +139,7 @@ class DataLoader:
         #   Извлекает из файла массив данных.
         #
 
-        print(filename)
+        # print(filename)
 
         timeseries = np.zeros(shape=(self.nrang, self.reg_res, len(self.keys)))
 
