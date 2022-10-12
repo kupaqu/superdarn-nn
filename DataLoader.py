@@ -38,8 +38,11 @@ class DataLoader:
     #
 
         # подпапки с радарами
-        radars = next(os.walk('data'))[1]
-
+        try:
+            radars = next(os.walk('data'))[1]
+        except StopIteration:
+            radars = []
+        
         # итерация по папкам с радарами
         for radar in radars:
             radar_subdir = os.path.join(self.datapath, radar)
