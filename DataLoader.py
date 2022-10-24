@@ -1,83 +1,76 @@
 import os
+import random
 import numpy as np
-import datetime as dt
+import datetime
 import glob
-from warnings import warn
-import bz2
-import pydarn
+import warnings
 
 class DataLoader:
 
     def __init__(self,
                  datapath: str,
                  windows_num: int = 30,
-                 nrang: int = 70):
+                 shuffle = True):
 
-        self.datapath = datapath        # путь к данным в формате fitacf.bz2
+        self.datapath = os.path.abspath(datapath)    # путь к данным
         self.windows_num = windows_num  # количество периодов в окне
-        self.nrang = nrang              # количество гейтов
-        self.delta_hours = 2            # разница в часах между началом записи в файле 
-        self.keys = ['pwr0',            # ключи данных
-                     'v',
-                     'p_l',
-                     'p_s',
-                     'w_l',
-                     'w_s',
-                     'qflg']       # ключ по которому лежит маска
-        self.total_bms = 16             # количество лучей
-        self.total_chs = 2              # количество каналов
-        self.reg_res = 60               # регулярное разрешение (количество записей за два часа)
+        self.shuffle = shuffle
+        
+        self.sequence_for_learning = self.__get_sequence()
 
-    def __call__(self):
+        if self.shuffle:
+            random.shuffle(self.sequence_for_learning)
+
+    def __iter__(self):
+        pass
+
+    def __get_sequence(self, augmentation_step=1):
 
     #
-    #   Функция вызывающаяся при каждой итерации.
-    #   Возвращает окно заданного размера,
-    #   содержащее сконкатенированные окна
-    #   за определенное время суток.
+    #   Генерирует последовательности имен файлов для обучения,
+    #   подпоследовательности упорядочены, что позволяет
+    #   в последующем шаффлить датасет
     #
+        sequence = []
 
         # подпапки с радарами
-        try:
-            radars = next(os.walk('data'))[1]
-        except StopIteration:
-            radars = []
+        radars = next(os.walk(self.datapath))[1]
         
         # итерация по папкам с радарами
         for radar in radars:
             radar_subdir = os.path.join(self.datapath, radar)
 
             # итерация по периодам
-            for hour in range(0, 24, self.delta_hours):
+            for hour in range(0, 24, 2):
                 
                 # вытаскиваем все имена файлов за период указаный в переменной hour
                 filenames = self.__get_filenames(radar_subdir, hour)
 
                 # итерация скользящим окном по файлам
-                for i in range(len(filenames)-self.windows_num):
+                for i in range(0, len(filenames)-self.windows_num, augmentation_step):
 
                     # целевое значение не должно быть заплаткой
                     if filenames[i+self.windows_num].endswith('patch'):
                         continue
                     
-                    # итерация по номерам каналов
-                    for channel in range(self.total_chs):
+                    # хотя бы половина контекстных данных должны присутствовать
+                    sub_sequence = filenames[i:i+self.windows_num+1] # последний элемент - целевое значение
+                    if self.__count_patches(sub_sequence) > len(sub_sequence) / 2:
+                        continue
+                    
+                    sequence.append(sub_sequence)
 
-                        # итерация по номерам лучей
-                        for beam in range(self.total_bms):
-                            
-                            # извлечение данных в виде многомерного массива
-                            x = self.__get_window(filenames=filenames[i:(i+self.windows_num)],
-                                                                 bmnum=beam,
-                                                                 channel=channel)
+        return sequence
+                    
+    def __count_patches(self, sequence):
+        cnt = 0
 
-                            # извдечение целевого значения
-                            y = self.__get_data(filenames[i+self.windows_num],
-                                                          bmnum=beam,
-                                                          channel=channel)
+        for item in sequence:
+            if item.endswith('.patch'):
+                cnt += 1
+        
+        return cnt
 
-                            yield (x, y)
-    
     def __get_filenames(self,
                         directory: str, # папка, где лежат файлы
                         hour: int):     # время суток
@@ -88,20 +81,20 @@ class DataLoader:
         #   Пропущенные даты заменяются строкой-"заглушкой".
         #
 
-        formatted_time = dt.time(hour=hour, minute=0)
-        filenames = sorted(glob.glob(directory+f'/*/*/*.{formatted_time.strftime("%H")}*.00.*.fitacf.bz2', recursive=True))
+        formatted_time = datetime.time(hour=hour, minute=0)
+        filenames = sorted(glob.glob(directory+f'/*/*/*.{formatted_time.strftime("%H")}*.00.*.npy', recursive=True))
         # массив для пропущенных значений
         patches = []
         # проверка остутствия пропусков во временном ряде и генерация заглушек
         if filenames:
 
             sliding_date = self.__get_date_from_filename(filenames[0])
-            delta = dt.timedelta(days=1)
+            delta = datetime.timedelta(days=1)
 
             for i in range(len(filenames)):
 
                 while self.__get_date_from_filename(filenames[i]) != sliding_date:
-                    warn(f'There is no data for {hour} hours at {sliding_date} in {directory}!')
+                    warnings.warn(f'There is no data for {hour} hours at {sliding_date} in {directory}!')
                     patches.append(f"{directory}/{sliding_date.strftime('%Y/%Y-%m/%Y%m%d')}.patch")
                     sliding_date += delta
 
@@ -118,90 +111,9 @@ class DataLoader:
         #   Возвращает дату указанную в файле.
         #
 
-        return dt.datetime.strptime(filename.split('/')[-1].split('.')[0], '%Y%m%d')
+        return datetime.datetime.strptime(filename.split('/')[-1].split('.')[0], '%Y%m%d')
 
-    def __get_window(self,
-                     filenames: list,
-                     bmnum: int,
-                     channel: int):
+warnings.filterwarnings('ignore')
 
-        #
-        #   Функция конкатенирующая выводы функции __get_data
-        #   в большие, общие массивы.
-        #
-
-        timeseries = np.zeros(shape=(self.nrang, 0, len(self.keys)))
-
-        for filename in filenames:
-            sub_series = self.__get_data(filename, bmnum, channel)
-            timeseries = np.concatenate((timeseries, sub_series), axis=1)
-
-        return timeseries
-    
-    def __get_data(self,
-                   filename: str,   # имя файла из которого извлекаются данные
-                   bmnum: int,      # номер луча
-                   channel: int):   # номер канала
-        
-        #
-        #   Извлекает из файла массив данных.
-        #
-
-        timeseries = np.zeros(shape=(self.nrang, self.reg_res, len(self.keys)))
-
-        # если вместо записи присутствует заплатка, возвращаем пустые массивы
-        if filename.endswith('patch'):
-            return timeseries
-
-        # открытие файла на чтение
-        with bz2.open(filename) as fp:
-            fitacf_stream = fp.read()
-        reader = pydarn.SuperDARNRead(fitacf_stream, True)
-        records = reader.read_fitacf()
-
-        # список меток времени
-        timestamps = []
-        # счетчик, показывающий текущий индекс в массивах timeseries и mask
-        cur = 0
-
-        for i in range(len(records)):
-
-            # если номер луча и канала совпадают с нужным
-            if records[i]['bmnum'] == bmnum and records[i]['channel'] == channel:
-                
-                rec_time = dt.datetime(year=records[i]['time.yr'],
-                        month=records[i]['time.mo'],
-                        day=records[i]['time.dy'],
-                        hour=records[i]['time.hr'],
-                        minute=records[i]['time.mt'])
-
-                if timestamps != []:
-
-                    diff_mins = (rec_time - timestamps[-1]).seconds // 60
-
-                    if diff_mins == 2:
-                        timestamps.append(rec_time)
-                        if 'slist' in records[i]:
-                            for n, m in enumerate(records[i]['slist']):
-                                if m >= self.nrang:
-                                    continue
-                                for j, k in enumerate(self.keys):
-                                    timeseries[m, cur, j] = records[i][k][n]
-                        cur += 1
-
-                    elif diff_mins == 1:
-                        continue
-                    # TODO: могут ли быть другие случаи?
-                    else:
-                        break
-
-                else:
-
-                    timestamps.append(rec_time)
-                    cur += 1
-        
-        # предупреждение о пробелах в данных
-        if cur != self.reg_res:
-            warn(f'Got only {cur} records from {filename}!')
-
-        return timeseries
+loader = DataLoader('./converted')
+print(len(loader.sequence_for_learning))
