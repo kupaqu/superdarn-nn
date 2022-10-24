@@ -8,8 +8,6 @@ import warnings
 
 import sys
 
-import matplotlib.pyplot as plt
-
 class DataConverter:
     def __init__(self, src_dir: str, dst_dir: str, nrang=70, reg_res=60, bmnum=16, chnum=1, keys=['pwr0', 'v', 'p_l', 'p_s', 'w_l', 'w_s', 'qflg']):
         self.src_dir = os.path.abspath(src_dir)
@@ -110,8 +108,7 @@ class DataConverter:
                 # предупреждение о пробелах в данных
                 if cur != self.reg_res:
                     warnings.warn(f'Got only {cur} records from {filename} at beam {beam}, channel {channel}!')
-        # plt.imshow(timeseries[:,:,0,0,0])
-        # plt.show()
+
         return timeseries
 
 if __name__ == '__main__':
