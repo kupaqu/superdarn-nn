@@ -19,9 +19,6 @@ class DataLoader:
         self.shuffle = shuffle
         
         self.sequence_for_learning = self.__get_sequence_for_learning()
-
-        if self.shuffle:
-            random.shuffle(self.sequence_for_learning)
         
         for filename in self.sequence_for_learning[0]:
             if filename.endswith('patch'):
@@ -31,11 +28,14 @@ class DataLoader:
             self.shape = x.shape
             break
 
-    def __iter__(self):
-        for sequence in self.sequence_for_learning:
-            yield self.__xy(sequence)
+    def __call__(self):
         if self.shuffle:
             random.shuffle(self.sequence_for_learning)
+        
+        for sequence in self.sequence_for_learning:
+            x, y = self.__xy(sequence)
+            for beam in range(16):
+                yield x[:,:,:,beam,0], y[:,:,:,beam,0]
 
     def __xy(self, sequence):
         if len(sequence) < 2:
@@ -142,13 +142,3 @@ class DataLoader:
         #
 
         return datetime.datetime.strptime(filename.split('/')[-1].split('.')[0], '%Y%m%d')
-
-warnings.filterwarnings('ignore')
-
-loader = DataLoader('./converted')
-start_time = datetime.datetime.now()
-for _ in tqdm(loader):
-    
-    pass
-
-print(datetime.datetime.now() - start_time)
