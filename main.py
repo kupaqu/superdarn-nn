@@ -16,8 +16,8 @@ val_data_path = 'converted_val_data'
 train_generator = DataLoader(data_path)
 val_generator = DataLoader(val_data_path)
 
-
 batch_size = 8
+epochs = 20
 
 dataset = tf.data.Dataset.from_generator(train_generator,
                                          output_types=(tf.float64, tf.float64)).batch(batch_size)
@@ -39,7 +39,7 @@ model_checkpoint = tf.keras.callbacks.ModelCheckpoint('best_model.hdf5', monitor
 print(f'train size: {len(train_generator.sequence_for_learning)} examples')
 print(f'val_dataset: {len(val_generator.sequence_for_learning)} examples')
 
-history = model.fit(dataset, validation_data=val_dataset, epochs=2, callbacks=[early_stopping, model_checkpoint])
+history = model.fit(dataset, validation_data=val_dataset, epochs=epochs, callbacks=[early_stopping, model_checkpoint])
 
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
