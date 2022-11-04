@@ -201,3 +201,7 @@ for epoch in range(epochs):
     old_gloss = float(gen_loss_tracker.result())
     old_mae = float(gen_mae_tracker.result())
     old_val = float(val_mae_tracker.result())
+
+with open('log.txt', 'w') as fp:
+    for record in history:
+        fp.write(f'{record[0]} {record[1]} {record[2]} {record[3]}')
