@@ -35,7 +35,7 @@ class DataLoader:
         for sequence in self.sequence_for_learning:
             x, y = self.__xy(sequence)
             for beam in range(16):
-                yield x[:,:,:,beam,0], y[:,:,:,beam,0]
+                yield x[:,:,:,beam,0], y[:,:,:-1,beam,0]
 
     def __xy(self, sequence):
         if len(sequence) < 2:

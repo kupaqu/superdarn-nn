@@ -12,16 +12,17 @@ def get_generator():
     inp = layers.Input(shape=(70, 1800, 7))
     conv = layers.Conv2D(28, kernel_size=(1, 1741), activation='tanh')(inp)
     norm = layers.BatchNormalization()(conv)
-    out = layers.Dense(7, activation='tanh')(norm)
+    out = layers.Dense(6, activation='tanh')(norm)
     model = Model(inp, out)
     return model
 
 # дискриминатор
 def get_discriminator():
     hist_inp = layers.Input(shape=(70, 1800, 7))
-    gen_out = layers.Input(shape=(70, 60, 7))
-    joined = layers.Concatenate(axis=2)([hist_inp, gen_out])
-    conv = layers.Conv2D(filters=7, kernel_size=(1, 1801), activation='tanh')(joined)
+    hist_conv = layers.Conv2D(filters=6, kernel_size=(1, 1))(hist_inp)
+    gen_out = layers.Input(shape=(70, 60, 6))
+    joined = layers.Concatenate(axis=2)([hist_conv, gen_out])
+    conv = layers.Conv2D(filters=6, kernel_size=(1, 1801), activation='tanh')(joined)
     norm = layers.BatchNormalization()(conv)
     flat = layers.Flatten()(norm)
     dense = layers.Dense(4)(flat)
@@ -83,7 +84,7 @@ for epoch in range(epochs):
 
     # обучение дискриминатора
     for step, (x_batch_train, y_batch_train) in enumerate(dataset):
-        print('\r G step:', step, end=' ')
+        print('\r D step:', step, end=' ')
 
         y_shape = tf.shape(y_batch_train)
         if y_shape[0] != batch_size:
@@ -102,14 +103,14 @@ for epoch in range(epochs):
                     true_mask[k, i*height:(i+1)*height, j*width:(j+1)*width].fill(val)
         
         fake_mask = tf.math.subtract(tf.ones(shape=y_shape[:-1], dtype=tf.dtypes.float64), true_mask)        
-        true_mask_7 = tf.repeat(tf.expand_dims(true_mask, axis=-1), 7, axis=-1, name=None)
-        fake_mask_7 = tf.repeat(tf.expand_dims(fake_mask, axis=-1), 7, axis=-1, name=None)
+        true_mask_6 = tf.repeat(tf.expand_dims(true_mask, axis=-1), 6, axis=-1, name=None)
+        fake_mask_6 = tf.repeat(tf.expand_dims(fake_mask, axis=-1), 6, axis=-1, name=None)
 
         x, y = x_batch_train, y_batch_train
 
         generated = tf.cast(gen(x), dtype=tf.dtypes.float64)
-        d_input_mixed = tf.math.add(tf.math.multiply(true_mask_7, y), 
-                                tf.math.multiply(fake_mask_7, generated))
+        d_input_mixed = tf.math.add(tf.math.multiply(true_mask_6, y), 
+                                tf.math.multiply(fake_mask_6, generated))
         
         with tf.GradientTape() as tape:
             prediction_mask = dis([x, d_input_mixed])
