@@ -69,6 +69,7 @@ class DataConverter:
 
                     # список меток времени
                     timestamps = []
+
                     # счетчик, показывающий текущий индекс в массивах timeseries и mask
                     cur = 0
 
@@ -84,41 +85,39 @@ class DataConverter:
                                                         minute=records[i]['time.mt'])
 
                             if timestamps != []:
-
-                                diff_mins = (rec_time - timestamps[-1]).seconds // 60
-
-                                if diff_mins == 2:
-                                    timestamps.append(rec_time)
-                                    if 'slist' in records[i]:
-                                        for n, m in enumerate(records[i]['slist']):
-                                            if m >= self.nrang:
-                                                continue
-                                            for j, k in enumerate(self.keys):
-                                                timeseries[m, cur, j, beam, channel] = records[i][k][n]
-
-                                    cur += 1
-
-                                elif diff_mins == 1:
-                                    continue
-
-                                # TODO: могут ли быть другие случаи?
-                                else:
-                                    break
+                                diff_mins = round((rec_time - timestamps[-1]).seconds / 60)
 
                             else:
+                                diff_mins = 0
+
+                            if diff_mins % 2:
+                                continue
+                            
+                            else:
                                 timestamps.append(rec_time)
-                                cur += 1
-                        
-                        if cur >= self.reg_res:
-                            break
+                                cur += diff_mins // 2
+                                
+                                if cur >= self.reg_res:
+                                    break
+
+                                if 'slist' in records[i]:
+                                    for n, m in enumerate(records[i]['slist']):
+                                        if m >= self.nrang:
+                                            continue
+                                        for j, k in enumerate(self.keys):
+                                            timeseries[m, cur, j, beam, channel] = records[i][k][n]
                     
                     # предупреждение о пробелах в данных
-                    if cur != self.reg_res:
-                        warnings.warn(f'Got only {cur} records from {filename} at beam {beam}, channel {channel}!')
+                    if cur < self.reg_res-1:
+                        # warnings.warn(f'Got only {cur} records from {filename} at beam {beam}, channel {channel}!')
+                        print(f'Got only {cur} records from {filename} at beam {beam}, channel {channel}!')
         
         except pydarnio.exceptions.dmap_exceptions.EmptyFileError:
             return (False, timeseries)
-
+        
+        if np.count_nonzero(timeseries[:,:,-1,:,:]) == 0:
+            return (False, timeseries)
+        
         return (True, timeseries)
 
 if __name__ == '__main__':
