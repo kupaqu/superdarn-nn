@@ -109,6 +109,8 @@ class DataConverter:
                     # индекс наблюдения в массиве
                     if timestamps:
                         index = (timestamps[-1] - timestamps[0]).seconds // 60
+                        if index >= self.radar_res: # иногда при одинаковой регулярности, разность между наблюдениями больше 1 минуты
+                            break
                     else:
                         index = 0
 
