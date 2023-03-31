@@ -8,137 +8,70 @@ import warnings
 from tqdm import tqdm
 
 class DataLoader:
-
     def __init__(self,
-                 datapath: str,
-                 windows_num: int = 30,
-                 shuffle = True):
-
-        self.datapath = os.path.abspath(datapath)    # путь к данным
-        self.windows_num = windows_num  # количество периодов в окне
+                 paths,
+                 shuffle=True):
         self.shuffle = shuffle
-        
-        self.sequence_for_learning = self.__get_sequence_for_learning()
-        
-        for filename in self.sequence_for_learning[0]:
-            if filename.endswith('patch'):
-                continue
+        self.data = {}
 
-            x = np.load(filename)
-            self.shape = x.shape
-            break
+        # загрузка всего датасета в память
+        for path in paths:
+            for root, _, files in os.walk(path):
+                for name in files:
+                    filename = name.split('.')
+                    key = (filename[0] + filename[1][:2], filename[4]) # ключ – кортеж вида (дата и час, луч)
+                    arr = np.load(os.path.join(root, name))
+                    self.data[key] = arr
 
     def __call__(self):
+        target_datetime = list(self.data.keys())
         if self.shuffle:
-            random.shuffle(self.sequence_for_learning)
-        
-        for sequence in self.sequence_for_learning:
-            x, y = self.__xy(sequence)
-            for beam in range(16):
-                yield x[:,:,:,beam,0], y[:,:,:-1,beam,0]
+            random.shuffle(target_datetime)
 
-    def __xy(self, sequence):
-        if len(sequence) < 2:
-            raise('Learning sequence must be at least 2 elements!')
-        
-        timeseries = []
+        # итерация по ключам в словаре self.data, где ключи – название файла
+        for key in target_datetime:
+            seq = self.__getSequence(key) # ключи исторических данных
+            arrays = []
+            missData = False
 
-        for filename in sequence:
-            if filename.endswith('patch'):
-                timeseries.append(np.zeros(shape=self.shape))
-            else:
-                timeseries.append(np.load(filename))
+            for item in seq:
+                try:
+                    arrays.append(self.data[item])
 
-        x = np.concatenate(timeseries[:-1], axis=1)
-        y = timeseries[-1]
-        
-        return x, y
-
-    def __get_sequence_for_learning(self, augmentation_step=1):
-
-    #
-    #   Генерирует последовательности имен файлов для обучения,
-    #   подпоследовательности упорядочены, что позволяет
-    #   в последующем шаффлить датасет
-    #
-        sequence = []
-
-        # подпапки с радарами
-        radars = next(os.walk(self.datapath))[1]
-        
-        # итерация по папкам с радарами
-        for radar in radars:
-            radar_subdir = os.path.join(self.datapath, radar)
-
-            # итерация по периодам
-            for hour in range(0, 24, 2):
-                
-                # вытаскиваем все имена файлов за период указаный в переменной hour
-                filenames = self.__get_filenames(radar_subdir, hour)
-
-                # итерация скользящим окном по файлам
-                for i in range(0, len(filenames)-self.windows_num, augmentation_step):
-
-                    # целевое значение не должно быть заплаткой
-                    if filenames[i+self.windows_num].endswith('patch'):
-                        continue
-                    
-                    # хотя бы половина контекстных данных должны присутствовать
-                    sub_sequence = filenames[i:i+self.windows_num+1] # последний элемент - целевое значение
-                    if self.__count_patches(sub_sequence) > len(sub_sequence) / 4:
-                        continue
-                    
-                    sequence.append(sub_sequence)
-
-        return sequence
-                    
-    def __count_patches(self, sequence):
-        cnt = 0
-
-        for item in sequence:
-            if item.endswith('.patch'):
-                cnt += 1
-        
-        return cnt
-
-    def __get_filenames(self,
-                        directory: str, # папка, где лежат файлы
-                        hour: int):     # время суток
-
-        #
-        #   Возвращает упорядоченный список всех имен файлов,
-        #   относящихся к одному и тому же времени суток.
-        #   Пропущенные даты заменяются строкой-"заглушкой".
-        #
-
-        formatted_time = datetime.time(hour=hour, minute=0)
-        filenames = sorted(glob.glob(directory+f'/*/*/*.{formatted_time.strftime("%H")}*.00.*.npy', recursive=True))
-        # массив для пропущенных значений
-        patches = []
-        # проверка остутствия пропусков во временном ряде и генерация заглушек
-        if filenames:
-
-            sliding_date = self.__get_date_from_filename(filenames[0])
-            delta = datetime.timedelta(days=1)
-
-            for i in range(len(filenames)):
-
-                while self.__get_date_from_filename(filenames[i]) != sliding_date:
-                    warnings.warn(f'There is no data for {hour} hours at {sliding_date} in {directory}!')
-                    patches.append(f"{directory}/{sliding_date.strftime('%Y/%Y-%m/%Y%m%d')}.patch")
-                    sliding_date += delta
-
-                sliding_date += delta
+                # некоторые исторические данные могут отсутствовать
+                except KeyError:
+                    missData = True
+                    break
             
-            # cоединяем список файлов с заплатками
-            filenames += patches
+            # если есть пропуски, то пропускаем пример
+            if missData:
+                continue
+            else:
+                x = np.concatenate(arrays, axis=1)
+                y = self.data[key]
+                yield np.concatenate([x[:,:,2:3], x[:,:,1:2]], axis=-1), y[:,:,2:3]*y[:,:,1:2] 
 
-        return sorted(filenames)
+    def __getSequence(self, key):
+        filename_datetime = datetime.strptime(key[0], '%Y%m%d%H')
 
-    def __get_date_from_filename(self, filename):
+        # список массивов за день до целевого массива
+        dayBefore = []
+        for i in range(24, 0, -2):
+            hoursBefore = ((filename_datetime-timedelta(hours=i)).strftime('%Y%m%d%H'), key[1])
+            dayBefore.append(hoursBefore)
 
-        #
-        #   Возвращает дату указанную в файле.
-        #
+        # тот же час, но за неделю до целевого массива
+        weekBeforeInThatHour = []
+        for i in range(7, 1, -1):
+            thatHour = ((filename_datetime-timedelta(days=i)).strftime('%Y%m%d%H'), key[1])
+            weekBeforeInThatHour.append(thatHour)
 
-        return datetime.datetime.strptime(filename.split('/')[-1].split('.')[0], '%Y%m%d')
+        return dayBefore + weekBeforeInThatHour
+
+        # список массивов за неделю до целевого массива
+        # weekBefore = []
+        # for i in range(24*7, 0, -2):
+        #     hoursBefore = ((filename_datetime-timedelta(hours=i)).strftime('%Y%m%d%H'), key[1])
+        #     weekBefore.append(hoursBefore)
+        
+        return weekBefore
