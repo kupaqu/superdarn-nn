@@ -9,10 +9,13 @@
 
 # Примеры
 Прогноз p_l:
+
 ![2018081804_13-y_pred](https://github.com/kupaqu/superdarn-nn/assets/39209065/0cdaed62-e2d5-48f9-b35e-a1a0b2785f39)
 
 Настоящий p_l:
+
 ![2018081804_13-y_true](https://github.com/kupaqu/superdarn-nn/assets/39209065/10d3186f-48f5-43d7-9c32-c28355cf986e)
 
 Окно прогнозов построенное по суткам:
+
 ![20180821_10](https://github.com/kupaqu/superdarn-nn/assets/39209065/11f2f7c8-7521-4904-8768-d023c0d38987)
